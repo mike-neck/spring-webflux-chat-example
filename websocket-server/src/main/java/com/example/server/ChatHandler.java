@@ -24,7 +24,6 @@ import org.springframework.web.reactive.socket.WebSocketSession;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.FluxProcessor;
 import reactor.core.publisher.Mono;
-import reactor.util.Loggers;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -52,18 +51,19 @@ public class ChatHandler implements WebSocketHandler {
                 session.getHandshakeInfo().getUri(),
                 session.getAttributes().getClass().getSimpleName(),
                 session.getAttributes());
-        return session.send(subscribingChannel
-                .map(this::encode)
-                .map(session::textMessage))
-                .doOnSubscribe(subscription -> handleMessage(session));
-    }
-
-    private void handleMessage(WebSocketSession session) {
-        session.receive()
+        Flux<Message> messages = session.receive()
                 .map(webSocketMessage -> webSocketMessage.getPayloadAsText(StandardCharsets.UTF_8))
                 .map(this::decode)
-                .log(Loggers.getLogger(ChatHandler.class))
-                .subscribe(this::onNext, this::onError, this::onComplete);
+                .doOnNext(message -> logger.info("new message from: {}, message: {}", session.getId(), message))
+                .doOnNext(this::onNext)
+                .doOnError(this::onError)
+                .doOnComplete(this::onComplete)
+                .doOnCancel(this::onCancel)
+                .onErrorResume(UncheckedIOException.class, e -> Mono.just(new Message("failure json")));
+        return session.send(
+                Flux.merge(subscribingChannel, messages)
+                .map(this::encode)
+                .map(session::textMessage));
     }
 
     private Message decode(String json) {
@@ -93,5 +93,9 @@ public class ChatHandler implements WebSocketHandler {
 
     private void onComplete() {
         logger.info("on complete");
+    }
+
+    private void onCancel() {
+        logger.info("on cancel");
     }
 }
