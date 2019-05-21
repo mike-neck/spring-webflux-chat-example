@@ -46,9 +46,10 @@ public class ChatHandler implements WebSocketHandler {
 
     @Override
     public Mono<Void> handle(WebSocketSession session) {
-        logger.info("new connection, id:{}, address:{}, attr[type:{}]:{}",
+        logger.info("new connection, id:{}, address:{}, uri: {}, attr[type:{}]:{}",
                 session.getId(),
                 session.getHandshakeInfo().getRemoteAddress(),
+                session.getHandshakeInfo().getUri(),
                 session.getAttributes().getClass().getSimpleName(),
                 session.getAttributes());
         return session.send(subscribingChannel
